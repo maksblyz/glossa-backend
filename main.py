@@ -10,10 +10,51 @@ def test_pymupdf():
         blocks = page.get_text("blocks")
         print(blocks)
 
+def visualize_sentences(pdf_path, sentence_data, out_path="output.pdf"):
+    doc = fitz.open(pdf_path)
+    for item in sentence_data:
+        page = doc[item["page"] - 1]
+        bbox = item["bbox"]
+
+        # basic validation
+        if not bbox or len(bbox) != 4:
+            continue
+        x0, y0, x1, y1 = bbox
+        if not all(map(float, [x0, y0, x1, y1])):
+            continue
+        if abs(x1 - x0) < 1 or abs(y1 - y0) < 1:
+            continue
+
+        # skip footers
+        if any(s in item["content"].lower() for s in ["author", "license", "mit press"]):
+            continue
+
+        rect = fitz.Rect(*bbox)
+        page.draw_rect(rect, color=(1, 0, 0), width=0.5)
+
+        # truncating text overlays
+        text = item["content"]
+        if len(text) > 60:
+            text = text[:57] + "..."
+        
+        # proportional fontsize
+        height = rect.y1 - rect.y0
+        fontsize = max(3, min(6, height * 0.2))
+        try:
+            page.insert_textbox(rect, item["content"], fontsize=fontsize, color=(0, 0, 1))
+        except Exception as e:
+            print(f"Skipping textbox draw error: {e}")
+
+
+    doc.save(out_path)
+
+
 def main():
-    extractor = FormulaExtractor()
-    results = extractor.extract("glasso_table.pdf")
-    print(f"Extracted {len(results)} formulas")
+    extractor = TextExtractor()
+    results = extractor.extract("glasso_sample.pdf")
+    visualize_sentences("glasso_sample.pdf", results, "highlighted.pdf")
+
+    print(f"Extracted {len(results)} text")
     for f in results:
         print(f)
 
